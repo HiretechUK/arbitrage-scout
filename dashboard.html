@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Arbitrage Scout</title>
+  <style>
+    :root{
+      --bg:#0d0f1a;--surface:#141728;--surface2:#1e2240;--surface3:#252a4a;
+      --accent:#7c6dff;--green:#00d4aa;--red:#ff5c5c;--orange:#ffb347;--blue:#4da6ff;
+      --text:#e2e8f0;--muted:#6b7490;--border:#242848;--radius:12px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;height:100vh;overflow:hidden}
+    .app{display:flex;height:100vh}
+
+    /* ---- Sidebar ---- */
+    .sidebar{width:210px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+    .logo{padding:22px 18px 14px;font-size:17px;font-weight:800;letter-spacing:-.3px}
+    .logo span{color:var(--green)}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;margin-left:6px;vertical-align:middle}
+    .live-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green)}
+    nav ul{list-style:none;padding:0 8px}
+    nav ul li{margin-bottom:2px}
+    nav ul a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;color:var(--muted);text-decoration:none;cursor:pointer;font-weight:500;transition:all .15s;user-select:none}
+    nav ul a:hover{background:var(--surface2);color:var(--text)}
+    nav ul a.active{background:var(--surface2);color:var(--text);border-left:3px solid var(--accent);padding-left:9px}
+    nav ul a .cnt{margin-left:auto;background:var(--accent);color:white;border-radius:999px;font-size:10px;font-weight:700;padding:1px 7px;min-width:20px;text-align:center}
+    nav ul a .cnt.red{background:var(--red)}
+    .sidebar-stats{padding:14px 14px 8px;border-top:1px solid var(--border);margin-top:auto}
+    .s-stat{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--muted)}
+    .s-stat span:last-child{color:var(--text);font-weight:600}
+
+    /* ---- Main ---- */
+    .main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+    /* ---- Live ticker ---- */
+    .ticker{background:var(--surface2);border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:12px;overflow:hidden;height:36px}
+    .ticker-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);font-weight:700;white-space:nowrap;flex-shrink:0}
+    .ticker-track{flex:1;overflow:hidden;position:relative}
+    .ticker-items{display:flex;gap:24px;animation:ticker-scroll 40s linear infinite;white-space:nowrap}
+    .ticker-items:hover{animation-play-state:paused}
+    @keyframes ticker-scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+    .ticker-item{font-size:12px;color:var(--muted);cursor:pointer;transition:color .15s}
+    .ticker-item:hover{color:var(--text)}
+    .ticker-item .t-deal{color:var(--green);font-weight:600}
+    .ticker-item .t-new{color:var(--orange);font-weight:600}
+    .ticker-item .t-alert{color:var(--red);font-weight:600}
+
+    /* ---- Pages ---- */
+    .page{display:none;padding:22px;animation:fadeIn .2s}
+    .page.active{display:block}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .page-title{font-size:20px;font-weight:700}
+
+    /* ---- Cards ---- */
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+    .card-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
+    .card-value{font-size:24px;font-weight:800}
+    .card-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+    /* ---- Search box ---- */
+    .search-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+    .search-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+    .field{display:flex;flex-direction:column;gap:4px}
+    .field label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+    input[type=text],input[type=number],select{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;transition:border-color .15s}
+    input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--accent)}
+    input[type=text]{width:240px}
+    input[type=number]{width:110px}
+    .btn{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover:not(:disabled){background:#8a7cff}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+    .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+    .btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-sm{padding:5px 12px;font-size:12px}
+    .btn-danger{background:rgba(255,92,92,.15);border:1px solid rgba(255,92,92,.3);color:var(--red)}
+    .btn-danger:hover{background:rgba(255,92,92,.25)}
+    .btn-green{background:var(--green);color:#000}
+    .btn-green:hover{background:#00f0c0}
+
+    /* Market chips */
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .chip{padding:4px 12px;border-radius:999px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:500;user-select:none;transition:all .15s}
+    .chip.on{background:rgba(124,109,255,.2);border-color:var(--accent);color:var(--accent)}
+
+    /* Status */
+    .status{padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none}
+    .status.show{display:flex;align-items:center;gap:8px}
+    .status.running{background:rgba(124,109,255,.12);color:var(--accent);border:1px solid rgba(124,109,255,.3)}
+    .status.done{background:rgba(0,212,170,.1);color:var(--green);border:1px solid rgba(0,212,170,.25)}
+    .status.error{background:rgba(255,92,92,.1);color:var(--red);border:1px solid rgba(255,92,92,.25)}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spinner{width:14px;height:14px;border:2px solid rgba(124,109,255,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+
+    /* Tables */
+    .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+    .table-bar{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border)}
+    .table-title{font-weight:600;font-size:14px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;padding:9px 14px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);background:var(--surface2);font-weight:700;white-space:nowrap}
+    td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(255,255,255,.015)}
+    .empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
+
+    /* Deal score badge */
+    .deal-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+    .deal-fire{background:rgba(255,92,92,.15);color:var(--red)}
+    .deal-hot{background:rgba(255,179,71,.15);color:var(--orange)}
+    .deal-good{background:rgba(0,212,170,.12);color:var(--green)}
+    .deal-ok{background:rgba(108,99,255,.1);color:var(--accent)}
+    .deal-none{background:var(--surface2);color:var(--muted)}
+
+    /* Price */
+    .price{font-weight:700;font-size:14px}
+    .price-low{color:var(--green)}
+    .price-mid{color:var(--orange)}
+    .price-high{color:var(--red)}
+
+    /* Country pills */
+    .pill{padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600}
+    .pill-UK{background:rgba(77,166,255,.15);color:var(--blue)}
+    .pill-UAE{background:rgba(0,212,170,.12);color:var(--green)}
+    .pill-Norway{background:rgba(255,92,92,.12);color:#ff8080}
+
+    /* New badge */
+    .new-badge{background:rgba(255,179,71,.2);color:var(--orange);border:1px solid rgba(255,179,71,.3);font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
+
+    /* Thumbnail */
+    .thumb{width:42px;height:42px;object-fit:cover;border-radius:7px;background:var(--surface2)}
+    .no-thumb{width:42px;height:42px;border-radius:7px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:16px}
+
+    /* Top deals grid */
+    .deals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:20px}
+    .deal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s;position:relative;overflow:hidden}
+    .deal-card:hover{border-color:var(--accent)}
+    .deal-card.fire{border-color:rgba(255,92,92,.4)}
+    .deal-card.hot{border-color:rgba(255,179,71,.4)}
+    .deal-card-img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:var(--surface2);margin-bottom:10px}
+    .deal-card-no-img{width:100%;height:110px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:10px}
+    .deal-card-title{font-size:13px;font-weight:600;line-height:1.35;margin-bottom:6px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .deal-card-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    .deal-card-price{font-size:16px;font-weight:800}
+    .deal-card-market{font-size:11px;color:var(--muted)}
+    .deal-card-bottom{display:flex;align-items:center;gap:6px}
+    .deal-card-score-bar{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+    .deal-card-score-fill{height:100%;border-radius:3px;background:var(--green);transition:width .5s}
+    .deal-card-pct{font-size:11px;font-weight:700;color:var(--green);white-space:nowrap}
+    .deal-rank{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);border-radius:999px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted)}
+    .deal-rank.top{background:rgba(255,179,71,.3);color:var(--orange)}
+
+    /* Notification panel */
+    .notif-panel{position:fixed;top:16px;right:16px;width:320px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .notif{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:all;animation:slideIn .25s ease;cursor:pointer}
+    .notif:hover{border-color:var(--accent)}
+    .notif.new{border-color:rgba(255,179,71,.5)}
+    .notif.deal{border-color:rgba(0,212,170,.4)}
+    .notif.price{border-color:rgba(255,92,92,.4)}
+    @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes slideOut{to{transform:translateX(120%);opacity:0}}
+    .notif-header{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .notif-body{font-size:12px;color:var(--muted);line-height:1.4}
+    .notif-price{font-size:14px;font-weight:700;margin-top:4px}
+
+    /* Alert feed items */
+    .alert-item{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start}
+    .alert-item:last-child{border-bottom:none}
+    .alert-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+    .alert-body{flex:1;min-width:0}
+    .alert-title{font-weight:600;margin-bottom:2px;font-size:13px}
+    .alert-meta{font-size:11px;color:var(--muted)}
+    .alert-type-badge{padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+    .at-new{background:rgba(255,179,71,.15);color:var(--orange)}
+    .at-deal{background:rgba(0,212,170,.12);color:var(--green)}
+    .at-price{background:rgba(255,92,92,.12);color:var(--red)}
+
+    /* Watchlist */
+    .wl-item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)}
+    .wl-item:last-child{border-bottom:none}
+    .wl-keyword{font-weight:700;font-size:14px}
+    .wl-meta{font-size:11px;color:var(--muted);margin-top:2px}
+    .wl-actions{margin-left:auto;display:flex;gap:6px}
+    .wl-status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .wl-status.active{background:var(--green);box-shadow:0 0 5px var(--green)}
+    .wl-status.inactive{background:var(--muted)}
+
+    /* Arbitrage */
+    .arb-item{display:grid;grid-template-columns:1fr 40px 1fr 100px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px}
+    .arb-item:last-child{border-bottom:none}
+    .arb-buy{font-size:13px}
+    .arb-sell{font-size:13px}
+    .arb-arrow{text-align:center;font-size:18px;color:var(--accent)}
+    .arb-margin{text-align:right}
+    .arb-margin-val{font-size:18px;font-weight:800;color:var(--green)}
+    .arb-margin-label{font-size:10px;color:var(--muted)}
+    .arb-label{font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:2px}
+    .arb-market{font-weight:600}
+    .arb-price{font-size:14px;font-weight:700}
+
+    /* Scrollbar */
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+  </style>
+</head>
+<body>
+
+<!-- Notification tray (top-right) -->
+<div class="notif-panel" id="notif-panel"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">Arbitrage<span>Scout</span> <span class="live-dot" id="live-dot" title="Live connection"></span></div>
+    <nav>
+      <ul id="nav">
+        <li><a class="active" onclick="goto('dashboard')" data-p="dashboard">🏠 Dashboard</a></li>
+        <li><a onclick="goto('search')"    data-p="search">🔍 Search</a></li>
+        <li><a onclick="goto('deals')"     data-p="deals">🔥 Top Deals <span class="cnt" id="cnt-deals">0</span></a></li>
+        <li><a onclick="goto('new')"       data-p="new">⚡ New Listings <span class="cnt red" id="cnt-new">0</span></a></li>
+        <li><a onclick="goto('watchlist')" data-p="watchlist">👁 Watchlist</a></li>
+        <li><a onclick="goto('listings')"  data-p="listings">📋 All Listings</a></li>
+        <li><a onclick="goto('arbitrage')" data-p="arbitrage">↕ Arbitrage</a></li>
+        <li><a onclick="goto('alerts')"    data-p="alerts">🔔 Alerts <span class="cnt red" id="cnt-alerts">0</span></a></li>
+        <li><a onclick="goto('history')"   data-p="history">🕓 History</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-stats">
+      <div class="s-stat"><span>Total listings</span><span id="s-total">—</span></div>
+      <div class="s-stat"><span>New (1h)</span><span id="s-new1h" style="color:var(--orange)">—</span></div>
+      <div class="s-stat"><span>Deals found</span><span id="s-deals" style="color:var(--green)">—</span></div>
+      <div class="s-stat"><span>Alerts today</span><span id="s-alerts" style="color:var(--red)">—</span></div>
+      <div class="s-stat"><span>Watching</span><span id="s-wl">—</span></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <!-- Live ticker -->
+    <div class="ticker" id="ticker-wrap">
+      <div class="ticker-label">⚡ LIVE</div>
+      <div class="ticker-track">
+        <div class="ticker-items" id="ticker-items">
+          <span class="ticker-item" style="color:var(--muted)">Waiting for live data — connect to the API and run a search to begin...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== DASHBOARD ======== -->
+    <div class="page active" id="page-dashboard">
+      <div style="padding:22px">
+        <div class="page-header">
+          <div class="page-title">Dashboard</div>
+          <button class="btn btn-outline btn-sm" onclick="refreshAll()">⟳ Refresh</button>
+        </div>
+        <div class="cards" id="dash-cards">
+          <div class="card"><div class="card-label">Total Listings</div><div class="card-value" id="d-total">—</div><div class="card-sub">in database</div></div>
+          <div class="card"><div class="card-label">New (last hour)</div><div class="card-value" id="d-new1h" style="color:var(--orange)">—</div><div class="card-sub">just discovered</div></div>
+          <div class="card"><div class="card-label">New (24h)</div><div class="card-value" id="d-new24h">—</div><div class="card-sub">listings</div></div>
+          <div class="card"><div class="card-label">Deals Found</div><div class="card-value" id="d-deals" style="color:var(--green)">—</div><div class="card-sub">score ≥ 30</div></div>
+          <div class="card"><div class="card-label">Alerts Today</div><div class="card-value" id="d-alerts" style="color:var(--red)">—</div><div class="card-sub">fired</div></div>
+          <div class="card"><div class="card-label">Watching</div><div class="card-value" id="d-wl" style="color:var(--blue)">—</div><div class="card-sub">products</div></div>
+        </div>
+
+        <div class="table-bar" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;margin-bottom:0">
+          <div class="table-title">🔥 Top 20 Deals Right Now</div>
+          <button class="btn btn-outline btn-sm" onclick="loadTopDeals()">Refresh</button>
+        </div>
+        <div id="top-deals-grid" class="deals-grid" style="background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:14px">
+          <div class="empty" style="grid-column:1/-1">Run a search first — deals will appear here ranked by how far below market average they are.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== SEARCH ======== -->
+    <div class="page" id="page-search">
+      <div style="padding:22px">
+        <div class="page-header"><div class="page-title">Search Markets</div></div>
+        <div class="search-box">
+          <div class="search-row">
+            <div class="field">
+              <label>Product / Keyword</label>
+              <input type="text" id="kw" placeholder='e.g. "iPhone 14 Pro"' onkeydown="if(event.key==='Enter')doSearch()"/>
+            </div>
+            <div class="field">
+              <label>Max items/market</label>
+              <input type="number" id="max-items" value="30" min="5" max="100"/>
+            </div>
+            <div class="field">
+              <label>Price alert ≤ (£)</label>
+              <input type="number" id="alert-price" placeholder="e.g. 200" min="0"/>
+            </div>
+            <div class="field">
+              <label>Deal score alert ≥</label>
+              <input type="number" id="alert-score" value="70" min="0" max="100"/>
+            </div>
+            <div class="field">
+              <label>Alert new listings</label>
+              <select id="alert-new">
+                <option value="1">Yes</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button class="btn btn-primary" id="search-btn" onclick="doSearch()">Search All Markets</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Marketplaces (none = all)</div>
+            <div class="chips" id="market-chips"></div>
+          </div>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <!-- Quick stats after search -->
+        <div class="cards" id="search-stats" style="display:none">
+          <div class="card"><div class="card-label">Found</div><div class="card-value" id="ss-total">0</div><div class="card-sub">listings</div></div>
+          <div class="card"><div class="card-label">New Listings</div><div class="card-value" id="ss-new" style="color:var(--orange)">0</div><div class="card-sub">first seen now</div></div>
+          <div class="card"><div class="card-label">Deals (score≥30)</div><div class="card-value" id="ss-deals" style="color:var(--green)">0</div><div class="card-sub">below market avg</div></div>
+          <div class="card"><div class="card-label">Lowest Price</div><div class="card-value" id="ss-min" style="color:var(--green)">—</div><div class="card-sub" id="ss-min-mkt"></div></div>
+        </div>
+
+        <!-- Results table -->
+        <div class="table-wrap" id="search-results" style="display:none">
+          <div class="table-bar">
+            <div class="table-title" id="results-title">Results</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm" onclick="sortSearch('price_gbp')">Price</button>
+              <button class="btn btn-outline btn-sm" onclick="sortSearch('deal_score')">Deal Score</button>
+              <button class="btn btn-outline btn-sm" onclick="sortSearch('marketplace')">Market</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr>
+              <th>Img</th><th>Title</th><th>Market</th><th>Country</th>
+              <th>Local price</th><th>£ GBP</th><th>Deal score</th><th>Condition</th><th>Link</th>
+            </tr></thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== TOP DEALS ======== -->
+    <div class="page" id="page-deals">
+      <div style="padding:22px">
+        <div class="page-header">
+          <div class="page-title">🔥 Top 20 Deals</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="deals-kw" placeholder="filter by keyword..." style="width:160px" oninput="loadTopDeals()"/>
+            <button class="btn btn-outline btn-sm" onclick="loadTopDeals()">⟳</button>
+          </div>
+        </div>
+        <div class="deals-grid" id="deals-grid">
+          <div class="empty" style="grid-column:1/-1">No deals yet — run a search to populate.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== NEW LISTINGS ======== -->
+    <div class="page" id="page-new">
+      <div style="padding:22px">
+        <div class="page-header">
+          <div class="page-title">⚡ New Listings</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="new-since" onchange="loadNewListings()" style="font-size:12px">
+              <option value="60">Last 1 hour</option>
+              <option value="360">Last 6 hours</option>
+              <option value="1440">Last 24 hours</option>
+              <option value="10080">Last 7 days</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="loadNewListings()">⟳</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Img</th><th>Title</th><th>Keyword</th><th>Market</th><th>Country</th><th>£ GBP</th><th>Deal Score</th><th>First seen</th><th>Link</th></tr></thead>
+            <tbody id="new-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== WATCHLIST ======== -->
+    <div class="page" id="page-watchlist">
+      <div style="padding:22px">
+        <div class="page-header">
+          <div class="page-title">👁 Watchlist</div>
+          <button class="btn btn-green btn-sm" onclick="showAddWatch()">+ Add product</button>
+        </div>
+
+        <!-- Add form (hidden by default) -->
+        <div class="search-box" id="add-watch-form" style="display:none;margin-bottom:20px">
+          <div style="font-weight:600;margin-bottom:12px">Add to Watchlist</div>
+          <div class="search-row">
+            <div class="field"><label>Keyword</label><input type="text" id="wl-kw" placeholder="e.g. Sony PS5"/></div>
+            <div class="field"><label>Price alert ≤ (£)</label><input type="number" id="wl-price" placeholder="optional"/></div>
+            <div class="field"><label>Deal score alert ≥</label><input type="number" id="wl-score" value="70" min="0" max="100"/></div>
+            <div class="field"><label>Alert new listings</label><select id="wl-new"><option value="1">Yes</option><option value="0">No</option></select></div>
+            <div class="field"><label>Poll every (mins)</label><input type="number" id="wl-poll" value="30" min="5"/></div>
+            <div class="field"><label>Max items/run</label><input type="number" id="wl-max" value="30" min="5" max="100"/></div>
+          </div>
+          <div style="margin-top:10px">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Limit to markets (optional)</div>
+            <div class="chips" id="wl-chips"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-primary" onclick="addToWatchlist()">Save & Watch</button>
+            <button class="btn btn-outline" onclick="document.getElementById('add-watch-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="wl-list">
+          <div class="empty" id="wl-empty">No products being watched. Add one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== ALL LISTINGS ======== -->
+    <div class="page" id="page-listings">
+      <div style="padding:22px">
+        <div class="page-header"><div class="page-title">📋 All Listings</div></div>
+        <div class="search-box" style="padding:14px">
+          <div class="search-row">
+            <div class="field"><label>Keyword</label><input type="text" id="f-kw" oninput="loadListings()"/></div>
+            <div class="field"><label>Country</label><select id="f-country" onchange="loadListings()"><option value="">All</option><option>UK</option><option>UAE</option><option>Norway</option></select></div>
+            <div class="field"><label>Max price (£)</label><input type="number" id="f-max" oninput="loadListings()" style="width:110px"/></div>
+            <div class="field"><label>Sort</label><select id="f-sort" onchange="loadListings()"><option value="price_gbp ASC">Price ↑</option><option value="price_gbp DESC">Price ↓</option><option value="deal_score DESC">Deal score ↓</option><option value="scraped_at DESC">Newest</option></select></div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Img</th><th>Title</th><th>Market</th><th>Country</th><th>£ GBP</th><th>Deal Score</th><th>% Below Avg</th><th>New?</th><th>Link</th></tr></thead>
+            <tbody id="listings-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== ARBITRAGE ======== -->
+    <div class="page" id="page-arbitrage">
+      <div style="padding:22px">
+        <div class="page-header"><div class="page-title">↕ Arbitrage Opportunities</div></div>
+        <div class="search-box" style="padding:14px">
+          <div class="search-row">
+            <div class="field"><label>Keyword</label><input type="text" id="arb-kw" oninput="loadArb()"/></div>
+            <div class="field"><label>Min margin (£)</label><input type="number" id="arb-margin" value="20" oninput="loadArb()" style="width:110px"/></div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-bar"><div class="table-title">Buy cheap → sell expensive</div></div>
+          <div id="arb-body"><div class="empty">Enter a keyword and run searches in multiple countries first.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== ALERTS ======== -->
+    <div class="page" id="page-alerts">
+      <div style="padding:22px">
+        <div class="page-header">
+          <div class="page-title">🔔 Alert Log</div>
+          <div style="display:flex;gap:6px">
+            <span class="deal-badge deal-fire">🔴 price</span>
+            <span class="deal-badge deal-hot">🟠 deal</span>
+            <span class="deal-badge deal-good">🟢 new listing</span>
+          </div>
+        </div>
+        <div class="table-wrap" id="alerts-list">
+          <div class="empty" id="alerts-empty">No alerts yet. Set thresholds when searching or via the watchlist.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== HISTORY ======== -->
+    <div class="page" id="page-history">
+      <div style="padding:22px">
+        <div class="page-header"><div class="page-title">🕓 Search History</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Keyword</th><th>Markets</th><th>Max items</th><th>Alert £</th><th>Results</th><th>New</th><th>Deals</th><th>Run at</th></tr></thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const API = (window.location.protocol === 'file:' || window.location.hostname === 'localhost') ? 'http://localhost:5050/api' : window.location.origin + '/api';
+let allMarkets = [];
+let selMarkets = new Set();
+let wlMarkets = new Set();
+let searchResults = [];
+let searchSort = {field:'price_gbp', asc:true};
+let alertCount = 0;
+let newCount = 0;
+let tickerItems = [];
+
+// ============================================================
+// SSE — live connection
+// ============================================================
+let sse;
+function connectSSE(){
+  sse = new EventSource(API + '/live');
+  sse.onopen = () => { setDot(true); addTicker('🟢 Live feed connected','muted'); };
+  sse.onerror = () => { setDot(false); setTimeout(connectSSE, 5000); };
+  sse.onmessage = (e) => {
+    try { handleEvent(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function setDot(ok){
+  const d = document.getElementById('live-dot');
+  d.classList.toggle('connected', ok);
+  d.title = ok ? 'Live — connected' : 'Disconnected — reconnecting...';
+}
+
+function handleEvent(ev){
+  const {type, data} = ev;
+  if(type === 'stats')         { updateStats(data); return; }
+  if(type === 'search_done')   { onSearchDone(data); return; }
+  if(type === 'poll_done')     { addTicker(`🔄 Auto-poll: "${data.keyword}" → ${data.total} listings, ${data.new} new, ${data.deals} deals`, 'muted'); updateStats(null); return; }
+  if(type === 'new_listing')   { onNewListing(data); return; }
+  if(type === 'top_deals')     { onTopDeals(data); return; }
+  if(type === 'alert')         { onAlertEvent(data); return; }
+  if(type === 'watchlist_updated') { loadWatchlist(); return; }
+  if(type === 'error')         { addTicker(`❌ Error: ${data.message}`, 'red'); return; }
+}
+
+function onSearchDone(d){
+  addTicker(`✅ "${d.keyword}" — ${d.total} listings, ${d.new} new, ${d.deals} deals`,'green');
+  updateStats(null);
+  newCount += d.new;
+  document.getElementById('cnt-new').textContent = newCount;
+}
+
+function onNewListing(d){
+  showNotif('new', `⚡ New listing — ${d.keyword}`,
+    `${(d.title||'').slice(0,60)} · ${d.marketplace} · ${d.country}`,
+    d.price_gbp ? `£${d.price_gbp.toFixed(2)}` : null, d.url);
+  addTicker(`⚡ NEW "${d.keyword}" — ${(d.title||'').slice(0,50)} — £${d.price_gbp?.toFixed(2) || '?'} on ${d.marketplace}`, 'orange');
+  newCount++;
+  document.getElementById('cnt-new').textContent = newCount;
+  if(document.getElementById('page-new').classList.contains('active')) loadNewListings();
+}
+
+function onTopDeals(d){
+  if(document.getElementById('page-dashboard').classList.contains('active')) loadTopDeals();
+  if(document.getElementById('page-deals').classList.contains('active')) loadTopDeals();
+  const n = d.deals?.length || 0;
+  document.getElementById('cnt-deals').textContent = n;
+}
+
+function onAlertEvent(d){
+  const icons = {price:'🔴', deal:'🟢', new_listing:'⚡'};
+  const icon = icons[d.alert_type] || '🔔';
+  showNotif(d.alert_type,
+    `${icon} ${d.alert_type.toUpperCase()} — ${d.keyword}`,
+    `${(d.listing?.title||'').slice(0,60)} · ${d.listing?.marketplace}`,
+    d.listing?.price_gbp ? `£${d.listing.price_gbp.toFixed(2)}` : null,
+    d.listing?.url);
+  addTicker(`${icon} ${d.alert_type.toUpperCase()}: "${d.keyword}" — £${d.listing?.price_gbp?.toFixed(2) || '?'} on ${d.listing?.marketplace}`, 'red');
+  alertCount++;
+  document.getElementById('cnt-alerts').textContent = alertCount;
+  if(document.getElementById('page-alerts').classList.contains('active')) loadAlerts();
+}
+
+// ============================================================
+// Stats
+// ============================================================
+async function updateStats(data){
+  const d = data || await fetchJSON('/stats');
+  if(!d) return;
+  ['total','new1h','deals','alerts','wl'].forEach(k => {
+    const map = {total:d.total_listings, new1h:d.new_last_hour, deals:d.deals_found, alerts:d.alerts_today, wl:d.watchlist_count};
+    const val = map[k];
+    document.getElementById('s-'+k).textContent = val ?? '—';
+    document.getElementById('d-'+k)  && (document.getElementById('d-'+k).textContent = val ?? '—');
+  });
+  document.getElementById('d-new24h') && (document.getElementById('d-new24h').textContent = d.new_last_24h ?? '—');
+}
+
+// ============================================================
+// Search
+// ============================================================
+async function doSearch(){
+  const kw = document.getElementById('kw').value.trim();
+  if(!kw){ alert('Enter a keyword.'); return; }
+  const markets = [...selMarkets];
+  const maxItems = +document.getElementById('max-items').value || 30;
+  const alertPrice = parseFloat(document.getElementById('alert-price').value) || null;
+  const alertScore = +document.getElementById('alert-score').value || 70;
+  const alertNew = document.getElementById('alert-new').value === '1';
+
+  setStatus('running','Scraping marketplaces...');
+  document.getElementById('search-btn').disabled = true;
+  document.getElementById('search-results').style.display = 'none';
+  document.getElementById('search-stats').style.display = 'none';
+
+  const res = await fetchJSON('/search', {method:'POST', body:JSON.stringify({keyword:kw, markets, max_items:maxItems, alert_price_gbp:alertPrice, alert_deal_score:alertScore, alert_new_listings:alertNew})});
+  if(!res){ setStatus('error','Failed to connect to API.'); document.getElementById('search-btn').disabled=false; return; }
+
+  const jobId = res.job_id;
+  let dots = 0;
+  const poll = setInterval(async()=>{
+    dots=(dots+1)%4;
+    const job = await fetchJSON('/jobs/'+jobId);
+    if(!job) return;
+    if(job.status === 'running'){
+      setStatus('running', `Scraping${'.'.repeat(dots+1)} — data will stream in live as each market completes`);
+    } else if(job.status === 'done'){
+      clearInterval(poll);
+      setStatus('done', `✅ ${job.total} listings found — ${job.new} new — ${job.deals} deals`);
+      document.getElementById('search-btn').disabled = false;
+      showSearchStats(job);
+      await loadSearchResults(kw);
+      loadTopDeals();
+    } else {
+      clearInterval(poll);
+      setStatus('error', `Error: ${job.error}`);
+      document.getElementById('search-btn').disabled = false;
+    }
+  }, 2500);
+}
+
+function showSearchStats(job){
+  document.getElementById('search-stats').style.display = 'grid';
+  document.getElementById('ss-total').textContent = job.total;
+  document.getElementById('ss-new').textContent = job.new;
+  document.getElementById('ss-deals').textContent = job.deals;
+}
+
+async function loadSearchResults(kw){
+  const rows = await fetchJSON(`/listings?keyword=${enc(kw)}&limit=300&order=price_gbp+ASC`);
+  if(!rows) return;
+  searchResults = rows;
+  renderSearchResults(kw, rows);
+}
+
+function renderSearchResults(kw, rows){
+  document.getElementById('search-results').style.display = 'block';
+  document.getElementById('results-title').textContent = `Results for "${kw}" (${rows.length})`;
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+  // show min price stat
+  const priced = rows.filter(l=>l.price_gbp!=null);
+  if(priced.length){
+    const minL = priced.reduce((a,b)=>a.price_gbp<b.price_gbp?a:b);
+    document.getElementById('ss-min').textContent = '£'+minL.price_gbp.toFixed(2);
+    document.getElementById('ss-min-mkt').textContent = minL.marketplace;
+    document.getElementById('search-stats').style.display = 'grid';
+  }
+  rows.forEach(l=>tbody.appendChild(makeListingRow(l, true)));
+}
+
+function sortSearch(field){
+  if(searchSort.field===field) searchSort.asc=!searchSort.asc;
+  else { searchSort.field=field; searchSort.asc=field==='deal_score'?false:true; }
+  const kw = document.getElementById('kw').value.trim();
+  const sorted=[...searchResults].sort((a,b)=>{
+    const av=a[field]??(searchSort.asc?Infinity:-Infinity);
+    const bv=b[field]??(searchSort.asc?Infinity:-Infinity);
+    return typeof av==='string'?(searchSort.asc?av.localeCompare(bv):bv.localeCompare(av)):(searchSort.asc?av-bv:bv-av);
+  });
+  renderSearchResults(kw, sorted);
+}
+
+// ============================================================
+// Top deals
+// ============================================================
+async function loadTopDeals(){
+  const kw = (document.getElementById('deals-kw')?.value||'').trim();
+  const url = '/top-deals?limit=20&min_score=5' + (kw?'&keyword='+enc(kw):'');
+  const deals = await fetchJSON(url);
+  if(!deals) return;
+  document.getElementById('cnt-deals').textContent = deals.length;
+
+  const renderGrid = (id) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(!deals.length){
+      el.innerHTML = '<div class="empty" style="grid-column:1/-1">No deals yet — run a search first.</div>';
+      return;
+    }
+    el.innerHTML = deals.slice(0,20).map((d,i)=>dealCard(d,i+1)).join('');
+  };
+  renderGrid('top-deals-grid');
+  renderGrid('deals-grid');
+}
+
+function dealCard(d, rank){
+  const score = d.deal_score || 0;
+  const pct = d.pct_below_avg || 0;
+  const p = d.price_gbp;
+  const cls = score>=80?'fire':score>=60?'hot':'';
+  const emoji = score>=80?'🔥':score>=60?'⚡':score>=40?'💡':'';
+  const fillPct = Math.min(100, score);
+  const priceCol = pct>30?'var(--green)':pct>15?'var(--orange)':'var(--text)';
+  return `
+  <div class="deal-card ${cls}" onclick="window.open('${esc(d.url)}','_blank')">
+    <div class="deal-rank ${rank<=3?'top':''}">${rank<=3?['🥇','🥈','🥉'][rank-1]:rank}</div>
+    ${d.image_url
+      ? `<img class="deal-card-img" src="${esc(d.image_url)}" onerror="this.parentElement.querySelector('.deal-card-no-img')&&(this.style.display='none')" />`
+      : `<div class="deal-card-no-img">📦</div>`}
+    <div class="deal-card-title">${esc(d.title||'').slice(0,80)}</div>
+    <div class="deal-card-meta">
+      <div class="deal-card-price" style="color:${priceCol}">£${p!=null?p.toFixed(2):'?'}</div>
+      <span class="pill pill-${d.country}">${d.country}</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(d.marketplace)} · ${esc(d.keyword||'')}</div>
+    <div class="deal-card-bottom">
+      <div class="deal-card-score-bar"><div class="deal-card-score-fill" style="width:${fillPct}%;background:${score>=80?'var(--red)':score>=60?'var(--orange)':'var(--green)'}"></div></div>
+      <div class="deal-card-pct" style="color:${score>=80?'var(--red)':score>=60?'var(--orange)':'var(--green)'}">${emoji} ${pct.toFixed(0)}% below avg</div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// New listings
+// ============================================================
+async function loadNewListings(){
+  const since = +document.getElementById('new-since').value || 60;
+  const rows = await fetchJSON(`/new-listings?since_minutes=${since}&limit=100`);
+  if(!rows) return;
+  newCount = 0;
+  document.getElementById('cnt-new').textContent = '';
+  const tbody = document.getElementById('new-body');
+  tbody.innerHTML = '';
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="9"><div class="empty">No new listings in this time window.</div></td></tr>'; return; }
+  rows.forEach(l=>{
+    const tr = makeListingRow(l, false);
+    // insert keyword + first_seen cols
+    const cells = tr.querySelectorAll('td');
+    const kwTd = document.createElement('td');
+    kwTd.style.cssText='font-size:11px;font-weight:600;color:var(--accent)';
+    kwTd.textContent = l.keyword||'';
+    tr.insertBefore(kwTd, cells[2]);
+
+    const seenTd = document.createElement('td');
+    seenTd.style.cssText='font-size:11px;color:var(--muted)';
+    seenTd.textContent = l.first_seen_at ? l.first_seen_at.slice(0,16).replace('T',' ') : '—';
+    // insert before last td
+    const lastTd = tr.lastElementChild;
+    tr.insertBefore(seenTd, lastTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+// ============================================================
+// Watchlist
+// ============================================================
+async function loadWatchlist(){
+  const items = await fetchJSON('/watchlist');
+  const container = document.getElementById('wl-list');
+  if(!items||!items.length){
+    container.innerHTML = '<div class="empty" id="wl-empty">No products being watched. Add one above.</div>';
+    return;
+  }
+  let html = '';
+  for(const item of items){
+    let markets='All';
+    try{const m=JSON.parse(item.markets||'[]');if(m.length)markets=m.join(', ');}catch{}
+    const polledStr = item.last_polled_at?item.last_polled_at.slice(0,16).replace('T',' ')+' UTC':'Never';
+    const nxtMins = item.poll_interval_mins || 30;
+    html += `
+    <div class="wl-item">
+      <div class="wl-status ${item.active?'active':'inactive'}"></div>
+      <div style="flex:1">
+        <div class="wl-keyword">${esc(item.keyword)}</div>
+        <div class="wl-meta">
+          Every ${nxtMins} min · Markets: ${markets} ·
+          ${item.alert_price_gbp?'Price ≤ £'+item.alert_price_gbp+' · ':''}
+          ${item.alert_deal_score?'Deal score ≥ '+item.alert_deal_score+' · ':''}
+          ${item.alert_new_listings?'✓ New listing alerts · ':''}
+          Last polled: ${polledStr}
+        </div>
+      </div>
+      <div class="wl-actions">
+        <button class="btn btn-outline btn-sm" onclick='triggerPoll("${esc(item.keyword)}")'>Poll now</button>
+        <button class="btn btn-danger btn-sm" onclick='removeFromWatchlist("${esc(item.keyword)}")'>Remove</button>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+async function addToWatchlist(){
+  const kw = document.getElementById('wl-kw').value.trim();
+  if(!kw){alert('Enter a keyword.');return;}
+  const price = parseFloat(document.getElementById('wl-price').value)||null;
+  const score = +document.getElementById('wl-score').value||70;
+  const alertNew = document.getElementById('wl-new').value==='1';
+  const pollMins = +document.getElementById('wl-poll').value||30;
+  const maxItems = +document.getElementById('wl-max').value||30;
+  const markets = [...wlMarkets];
+  const res = await fetchJSON('/watchlist',{method:'POST',body:JSON.stringify({keyword:kw,markets,alert_new_listings:alertNew,alert_price_gbp:price,alert_deal_score:score,max_items:maxItems,poll_interval_mins:pollMins})});
+  if(res){
+    document.getElementById('add-watch-form').style.display='none';
+    document.getElementById('wl-kw').value='';
+    loadWatchlist();
+    addTicker(`👁 Now watching: "${kw}"`, 'green');
+  }
+}
+
+async function removeFromWatchlist(kw){
+  await fetch(`${API}/watchlist/${encodeURIComponent(kw)}`,{method:'DELETE'});
+  loadWatchlist();
+}
+
+async function triggerPoll(kw){
+  // trigger a manual search using watchlist config
+  const item = await fetchJSON(`/watchlist`);
+  const found = item && item.find(i=>i.keyword===kw);
+  if(!found) return;
+  let markets=[];
+  try{markets=JSON.parse(found.markets||'[]');}catch{}
+  const res = await fetchJSON('/search',{method:'POST',body:JSON.stringify({keyword:kw,markets,max_items:found.max_items||30,alert_price_gbp:found.alert_price_gbp,alert_deal_score:found.alert_deal_score,alert_new_listings:Boolean(found.alert_new_listings)})});
+  if(res) addTicker(`🔄 Manual poll started: "${kw}"`, 'accent');
+}
+
+function showAddWatch(){
+  const f = document.getElementById('add-watch-form');
+  f.style.display = f.style.display==='none'?'block':'none';
+  // populate watchlist market chips
+  const cont = document.getElementById('wl-chips');
+  if(!cont.children.length){
+    allMarkets.forEach(m=>{
+      const c=document.createElement('div');
+      c.className='chip';
+      c.textContent=m.marketplace;
+      c.dataset.key=m.key;
+      c.onclick=()=>{c.classList.toggle('on');wlMarkets.has(m.key)?wlMarkets.delete(m.key):wlMarkets.add(m.key);};
+      cont.appendChild(c);
+    });
+  }
+}
+
+// ============================================================
+// Listings
+// ============================================================
+async function loadListings(){
+  const kw=document.getElementById('f-kw').value;
+  const country=document.getElementById('f-country').value;
+  const maxP=document.getElementById('f-max').value;
+  const sort=document.getElementById('f-sort').value;
+  let url=`/listings?limit=300&order=${enc(sort)}`;
+  if(kw) url+=`&keyword=${enc(kw)}`;
+  if(country) url+=`&country=${enc(country)}`;
+  if(maxP) url+=`&max_price_gbp=${maxP}`;
+  const rows = await fetchJSON(url);
+  if(!rows) return;
+  const tbody=document.getElementById('listings-body');
+  tbody.innerHTML='';
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="9"><div class="empty">No listings. Run a search first.</div></td></tr>';return;}
+  rows.forEach(l=>tbody.appendChild(makeListingRow(l,true)));
+}
+
+// ============================================================
+// Arbitrage
+// ============================================================
+async function loadArb(){
+  const kw=document.getElementById('arb-kw').value.trim();
+  const margin=+document.getElementById('arb-margin').value||20;
+  if(!kw) return;
+  const rows=await fetchJSON(`/arbitrage?keyword=${enc(kw)}&min_margin_gbp=${margin}`);
+  const body=document.getElementById('arb-body');
+  if(!rows||!rows.length){body.innerHTML='<div class="empty">No opportunities found yet. Search the same keyword from multiple countries first.</div>';return;}
+  body.innerHTML=rows.slice(0,30).map(o=>`
+    <div class="arb-item">
+      <div class="arb-buy">
+        <div class="arb-label">BUY HERE</div>
+        <div class="arb-market">${esc(o.buy_market)}</div>
+        <div style="font-size:11px;color:var(--muted)">${o.buy_country}</div>
+        <div class="arb-price price-low">£${o.buy_price_gbp?.toFixed(2)}</div>
+        ${o.buy_url?`<a href="${esc(o.buy_url)}" target="_blank" style="font-size:11px;color:var(--accent)">View →</a>`:''}
+        ${o.buy_deal_score>30?dealBadge(o.buy_deal_score):''}
+      </div>
+      <div class="arb-arrow">→</div>
+      <div class="arb-sell">
+        <div class="arb-label">SELL HERE</div>
+        <div class="arb-market">${esc(o.sell_market)}</div>
+        <div style="font-size:11px;color:var(--muted)">${o.sell_country}</div>
+        <div class="arb-price price-high">£${o.sell_price_gbp?.toFixed(2)}</div>
+      </div>
+      <div class="arb-margin">
+        <div class="arb-margin-val">£${o.margin_gbp?.toFixed(0)}</div>
+        <div class="arb-margin-label">est. margin</div>
+        <div style="font-size:18px">${o.margin_gbp>100?'🔥':o.margin_gbp>50?'⚡':'💡'}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ============================================================
+// Alerts
+// ============================================================
+async function loadAlerts(){
+  const rows=await fetchJSON('/alerts');
+  const container=document.getElementById('alerts-list');
+  if(!rows||!rows.length){container.innerHTML='<div class="empty">No alerts fired yet.</div>';return;}
+  alertCount=0;
+  document.getElementById('cnt-alerts').textContent='';
+  const icons={price:'🔴',deal:'🟢',new_listing:'⚡'};
+  container.innerHTML=rows.map(a=>`
+    <div class="alert-item">
+      <div class="alert-icon">${icons[a.alert_type]||'🔔'}</div>
+      <div class="alert-body">
+        <div class="alert-title">
+          <span class="alert-type-badge at-${a.alert_type}">${a.alert_type?.replace('_',' ')}</span>
+          &nbsp;"${esc(a.keyword)}" — ${esc((a.title||'').slice(0,60))}
+        </div>
+        <div class="alert-meta">
+          ${a.price_gbp?`£${a.price_gbp.toFixed(2)} · `:''}
+          ${a.deal_score?`Score: ${a.deal_score.toFixed(0)} · `:''}
+          ${a.pct_below?`${a.pct_below.toFixed(1)}% below avg · `:''}
+          ${esc(a.marketplace||'')} · ${a.fired_at?.slice(0,16).replace('T',' ')} UTC
+        </div>
+        ${a.url?`<a href="${esc(a.url)}" target="_blank" style="font-size:11px;color:var(--accent)">View listing →</a>`:''}
+      </div>
+    </div>`).join('');
+}
+
+// ============================================================
+// History
+// ============================================================
+async function loadHistory(){
+  const rows=await fetchJSON('/history');
+  const tbody=document.getElementById('history-body');
+  if(!rows||!rows.length){tbody.innerHTML='<tr><td colspan="8"><div class="empty">No searches yet.</div></td></tr>';return;}
+  tbody.innerHTML=rows.map(h=>{
+    let markets='All';try{const m=JSON.parse(h.markets||'[]');if(m.length)markets=m.join(', ');}catch{}
+    return`<tr>
+      <td style="font-weight:600">${esc(h.keyword)}</td>
+      <td style="font-size:11px;color:var(--muted)">${markets}</td>
+      <td>${h.max_items}</td>
+      <td>${h.alert_gbp?'£'+h.alert_gbp:'—'}</td>
+      <td style="font-weight:600">${h.result_count}</td>
+      <td style="color:var(--orange)">${h.new_listings||0}</td>
+      <td style="color:var(--green)">${h.deals_found||0}</td>
+      <td style="font-size:11px;color:var(--muted)">${(h.run_at||'').slice(0,16).replace('T',' ')} UTC</td>
+    </tr>`;}).join('');
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function makeListingRow(l, showDealScore){
+  const tr = document.createElement('tr');
+  const pctCls = l.price_gbp<50?'price-low':l.price_gbp<200?'price-mid':'price-high';
+  tr.innerHTML=`
+    <td>${l.image_url?`<img class="thumb" src="${esc(l.image_url)}" onerror="this.style.display='none'"/>`:`<div class="no-thumb">📦</div>`}</td>
+    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.title)}">
+      ${l.is_new?'<span class="new-badge">new</span> ':''}${esc((l.title||'').slice(0,60))}
+    </td>
+    <td style="font-size:11px;white-space:nowrap">${esc(l.marketplace)}</td>
+    <td><span class="pill pill-${l.country}">${l.country}</span></td>
+    <td style="font-size:12px;color:var(--muted)">${l.price_local??'—'} ${l.currency}</td>
+    <td><span class="price ${pctCls}">£${l.price_gbp!=null?l.price_gbp.toFixed(2):'—'}</span></td>
+    ${showDealScore?`<td>${dealBadge(l.deal_score)}</td>`:''}
+    ${showDealScore?`<td style="font-size:12px;color:${l.pct_below_avg>0?'var(--green)':'var(--muted)'}">${l.pct_below_avg>0?l.pct_below_avg.toFixed(1)+'%':'-'}</td>`:''}
+    <td style="font-size:11px;color:var(--muted)">${l.condition_text||'—'}</td>
+    <td>${l.url?`<a style="color:var(--accent);font-size:12px;text-decoration:none" href="${esc(l.url)}" target="_blank">View →</a>`:'—'}</td>`;
+  return tr;
+}
+
+function dealBadge(score){
+  score=score||0;
+  if(score>=80) return `<span class="deal-badge deal-fire">🔥 ${score.toFixed(0)}</span>`;
+  if(score>=60) return `<span class="deal-badge deal-hot">⚡ ${score.toFixed(0)}</span>`;
+  if(score>=30) return `<span class="deal-badge deal-good">💡 ${score.toFixed(0)}</span>`;
+  if(score>0)  return `<span class="deal-badge deal-ok">${score.toFixed(0)}</span>`;
+  return `<span class="deal-badge deal-none">—</span>`;
+}
+
+// ---- Ticker ----
+function addTicker(text, colorKey){
+  const color = colorKey==='green'?'var(--green)':colorKey==='orange'?'var(--orange)':colorKey==='red'?'var(--red)':colorKey==='accent'?'var(--accent)':'var(--muted)';
+  tickerItems.push({text,color});
+  if(tickerItems.length>40) tickerItems.shift();
+  const wrap = document.getElementById('ticker-items');
+  // Double items for seamless loop
+  const html = [...tickerItems,...tickerItems].map(t=>`<span class="ticker-item" style="color:${t.color}">${esc(t.text)}</span>`).join('');
+  wrap.innerHTML = html;
+}
+
+// ---- Notifications ----
+function showNotif(type, title, body, price, url){
+  const panel=document.getElementById('notif-panel');
+  const n=document.createElement('div');
+  n.className=`notif ${type}`;
+  n.innerHTML=`<div class="notif-header" style="color:${type==='new'?'var(--orange)':type==='deal'?'var(--green)':'var(--red)'}">${title}</div><div class="notif-body">${esc(body)}</div>${price?`<div class="notif-price">${price}</div>`:''}`;
+  if(url) n.onclick=()=>window.open(url,'_blank');
+  panel.insertBefore(n,panel.firstChild);
+  // Auto-remove after 8s
+  setTimeout(()=>{n.style.animation='slideOut .3s forwards';setTimeout(()=>n.remove(),300);},8000);
+  // Max 4 notifs
+  while(panel.children.length>4) panel.lastChild.remove();
+}
+
+// ---- Status ----
+function setStatus(type,text){
+  const el=document.getElementById('status');
+  el.className=`status show ${type}`;
+  el.innerHTML=type==='running'?`<div class="spinner"></div>${text}`:text;
+}
+
+// ---- Nav ----
+function goto(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.p===name));
+  if(name==='watchlist') loadWatchlist();
+  if(name==='listings')  loadListings();
+  if(name==='alerts')    loadAlerts();
+  if(name==='history')   loadHistory();
+  if(name==='deals')     loadTopDeals();
+  if(name==='new')       loadNewListings();
+  if(name==='dashboard') loadTopDeals();
+  if(name==='arbitrage') loadArb();
+}
+
+async function refreshAll(){
+  await updateStats(null);
+  await loadTopDeals();
+}
+
+// ---- Fetch ----
+async function fetchJSON(path, opts={}){
+  try{
+    const headers={'Content-Type':'application/json',...(opts.headers||{})};
+    const r=await fetch(API+path,{...opts,headers});
+    return r.ok ? r.json() : null;
+  }catch{return null;}
+}
+
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function enc(s){return encodeURIComponent(s);}
+
+// ============================================================
+// Boot
+// ============================================================
+async function boot(){
+  // Markets
+  const ms = await fetchJSON('/markets');
+  if(ms){
+    allMarkets=ms;
+    const cont=document.getElementById('market-chips');
+    ms.forEach(m=>{
+      const c=document.createElement('div');c.className='chip';c.textContent=m.marketplace+' ('+m.currency+')';c.dataset.key=m.key;
+      c.onclick=()=>{c.classList.toggle('on');selMarkets.has(m.key)?selMarkets.delete(m.key):selMarkets.add(m.key);};
+      cont.appendChild(c);
+    });
+  }
+  await updateStats(null);
+  await loadTopDeals();
+  connectSSE();
+  // Refresh stats every 30s
+  setInterval(()=>updateStats(null), 30000);
+}
+
+boot();
+</script>
+</body>
+</html>
