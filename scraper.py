@@ -104,12 +104,22 @@ class ApifyRunner:
                       rates: dict) -> list:
         cfg = ACTORS[market_key]
         raw = self._run_actor(cfg["id"], cfg["input_builder"](keyword, max_items))
+        # Build keyword filter — all words must appear in title (case-insensitive)
+        kw_words = [w.lower() for w in keyword.split() if len(w) > 2]
         results = []
+        skipped = 0
         for item in raw:
             l = self._normalise(item, cfg, rates)
-            if l:
-                l["keyword"] = keyword
-                results.append(l)
+            if not l:
+                continue
+            title_lower = l["title"].lower()
+            if kw_words and not all(w in title_lower for w in kw_words):
+                skipped += 1
+                continue
+            l["keyword"] = keyword
+            results.append(l)
+        if skipped:
+            log.info(f"  -> filtered out {skipped} irrelevant listings from {cfg['marketplace']}")
         return results
 
     def search_all(self, keyword: str, markets: Optional[list], max_items: int,
