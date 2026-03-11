@@ -90,7 +90,7 @@ class ApifyRunner:
         try:
             log.info(f"  Running {actor_id}...")
             resp = self.session.post(url, json=input_data, params=params, timeout=timeout_secs + 30)
-            if resp.status_code == 200:
+            if resp.status_code in (200, 201):
                 items = resp.json()
                 log.info(f"  -> {len(items)} items from {actor_id}")
                 return items
