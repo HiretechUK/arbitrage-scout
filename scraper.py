@@ -88,7 +88,8 @@ class ApifyRunner:
         self.session.headers["Content-Type"] = "application/json"
 
     def _run_actor(self, actor_id: str, input_data: dict, timeout_secs: int = 120) -> list:
-        url = f"{APIFY_BASE}/acts/{actor_id}/run-sync-get-dataset-items"
+        actor_path = actor_id.replace("/", "~")
+        url = f"{APIFY_BASE}/acts/{actor_path}/run-sync-get-dataset-items"
         params = {"token": self.token, "timeout": timeout_secs}
         try:
             log.info(f"  Running {actor_id}...")
