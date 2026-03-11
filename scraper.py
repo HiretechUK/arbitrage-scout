@@ -16,48 +16,44 @@ log = logging.getLogger(__name__)
 APIFY_BASE = "https://api.apify.com/v2"
 
 # ---------------------------------------------------------------------------
-# Actor registry
+# Actor registry  (verified working actors, pay-per-use, no monthly rental)
 # ---------------------------------------------------------------------------
+import urllib.parse
+
+def _fb_url(query, city):
+    q = urllib.parse.quote_plus(query)
+    return f"https://www.facebook.com/marketplace/{city}/search?query={q}"
+
 ACTORS = {
     "ebay_uk": {
-        "id": "dtrungtin/ebay-items-scraper",
+        "id": "automation-lab/ebay-scraper",
         "country": "UK", "currency": "GBP", "marketplace": "eBay UK",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "site": "ebay.co.uk", "maxItems": n},
+        "input_builder": lambda kw, n: {"searchQueries": [kw], "ebayDomain": "ebay.co.uk", "maxItems": n},
+        "type": "ebay",
     },
     "ebay_uae": {
-        "id": "dtrungtin/ebay-items-scraper",
+        "id": "automation-lab/ebay-scraper",
         "country": "UAE", "currency": "USD", "marketplace": "eBay UAE",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "site": "ebay.com", "maxItems": n},
-    },
-    "gumtree_uk": {
-        "id": "shahidirfan/gumtree-scraper",
-        "country": "UK", "currency": "GBP", "marketplace": "Gumtree UK",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "maxItems": n},
-    },
-    "dubizzle_uae": {
-        "id": "easyapi/dubizzle-list-search-scraper",
-        "country": "UAE", "currency": "AED", "marketplace": "Dubizzle UAE",
-        "input_builder": lambda kw, n: {"keyword": kw, "maxItems": n},
-    },
-    "finn_no": {
-        "id": "tri_angle/finn-no-scraper",
-        "country": "Norway", "currency": "NOK", "marketplace": "Finn.no",
-        "input_builder": lambda kw, n: {"query": kw, "maxItems": n},
+        "input_builder": lambda kw, n: {"searchQueries": [kw], "ebayDomain": "ebay.com", "maxItems": n},
+        "type": "ebay",
     },
     "facebook_uk": {
-        "id": "apify/facebook-marketplace-scraper",
+        "id": "curious_coder/facebook-marketplace",
         "country": "UK", "currency": "GBP", "marketplace": "Facebook UK",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "locationName": "London, UK", "maxItems": n},
+        "input_builder": lambda kw, n: {"urls": [_fb_url(kw, "london")], "maxItems": n},
+        "type": "facebook",
     },
     "facebook_uae": {
-        "id": "apify/facebook-marketplace-scraper",
+        "id": "curious_coder/facebook-marketplace",
         "country": "UAE", "currency": "AED", "marketplace": "Facebook UAE",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "locationName": "Dubai, UAE", "maxItems": n},
+        "input_builder": lambda kw, n: {"urls": [_fb_url(kw, "dubai")], "maxItems": n},
+        "type": "facebook",
     },
     "facebook_norway": {
-        "id": "apify/facebook-marketplace-scraper",
+        "id": "curious_coder/facebook-marketplace",
         "country": "Norway", "currency": "NOK", "marketplace": "Facebook Norway",
-        "input_builder": lambda kw, n: {"searchQuery": kw, "locationName": "Oslo, Norway", "maxItems": n},
+        "input_builder": lambda kw, n: {"urls": [_fb_url(kw, "oslo")], "maxItems": n},
+        "type": "facebook",
     },
 }
 
@@ -128,8 +124,48 @@ class ApifyRunner:
         return all_results
 
     def _normalise(self, item: dict, cfg: dict, rates: dict) -> Optional[dict]:
-        price_raw = (item.get("price") or item.get("priceValue") or item.get("price_value")
-                     or item.get("listingPrice") or item.get("Price"))
+        actor_type = cfg.get("type", "generic")
+
+        # --- Extract fields based on actor type ---
+        if actor_type == "facebook":
+            title = item.get("marketplace_listing_title") or item.get("custom_title") or "Unknown"
+            url   = item.get("listingUrl") or ""
+            img   = item.get("primary_listing_photo_url") or ""
+            cond  = "Unknown"
+            # Price is a nested dict: {"formatted_amount": "£12,000", "amount": "12000.00"}
+            lp = item.get("listing_price") or {}
+            if isinstance(lp, dict):
+                price_raw = lp.get("amount") or lp.get("amount_with_offset")
+            else:
+                price_raw = lp
+            # Location is also nested
+            loc_raw = item.get("location") or {}
+            if isinstance(loc_raw, dict):
+                rg = loc_raw.get("reverse_geocode") or {}
+                loc = rg.get("city") or rg.get("state") or cfg["country"]
+            else:
+                loc = str(loc_raw) if loc_raw else cfg["country"]
+
+        elif actor_type == "ebay":
+            title = item.get("title") or "Unknown"
+            url   = item.get("url") or item.get("itemUrl") or ""
+            img   = item.get("thumbnail") or item.get("image") or ""
+            cond  = item.get("condition") or "Unknown"
+            price_raw = item.get("price") or item.get("priceValue")
+            loc   = item.get("location") or item.get("itemLocation") or cfg["country"]
+
+        else:
+            price_raw = (item.get("price") or item.get("priceValue") or item.get("price_value")
+                         or item.get("listingPrice") or item.get("Price"))
+            title = (item.get("title") or item.get("name") or item.get("itemName")
+                     or item.get("Title") or "Unknown")
+            url   = (item.get("url") or item.get("link") or item.get("itemUrl")
+                     or item.get("listingUrl") or "")
+            loc   = item.get("location") or item.get("city") or item.get("region") or cfg["country"]
+            cond  = item.get("condition") or item.get("itemCondition") or "Unknown"
+            img   = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or ""
+
+        # --- Convert price to GBP ---
         price_gbp = None
         if price_raw is not None:
             try:
@@ -141,14 +177,6 @@ class ApifyRunner:
                 price_gbp = round(price_num * rate, 2)
             except (ValueError, TypeError):
                 pass
-
-        title = (item.get("title") or item.get("name") or item.get("itemName")
-                 or item.get("Title") or "Unknown")
-        url   = (item.get("url") or item.get("link") or item.get("itemUrl")
-                 or item.get("listingUrl") or "")
-        loc   = item.get("location") or item.get("city") or item.get("region") or cfg["country"]
-        cond  = item.get("condition") or item.get("itemCondition") or "Unknown"
-        img   = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or ""
 
         if not url:                   # skip items with no URL — can't deduplicate
             return None
