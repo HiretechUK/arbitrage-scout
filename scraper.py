@@ -103,7 +103,9 @@ class ApifyRunner:
     def search_market(self, market_key: str, keyword: str, max_items: int,
                       rates: dict) -> list:
         cfg = ACTORS[market_key]
-        raw = self._run_actor(cfg["id"], cfg["input_builder"](keyword, max_items))
+        # Cap Facebook at 50 per market — it returns hundreds and drowns out eBay
+        effective_max = min(max_items, 50) if cfg.get("type") == "facebook" else max_items
+        raw = self._run_actor(cfg["id"], cfg["input_builder"](keyword, effective_max))
         # Build keyword filter — all words must appear in title (case-insensitive)
         kw_words = [w.lower() for w in keyword.split() if len(w) > 2]
         results = []
