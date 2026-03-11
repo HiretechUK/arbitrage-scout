@@ -83,7 +83,7 @@ class ApifyRunner:
         self.session = requests.Session()
         self.session.headers["Content-Type"] = "application/json"
 
-    def _run_actor(self, actor_id: str, input_data: dict, timeout_secs: int = 120) -> list:
+    def _run_actor(self, actor_id: str, input_data: dict, timeout_secs: int = 180) -> list:
         actor_path = actor_id.replace("/", "~")
         url = f"{APIFY_BASE}/acts/{actor_path}/run-sync-get-dataset-items"
         params = {"token": self.token, "timeout": timeout_secs}
@@ -114,13 +114,16 @@ class ApifyRunner:
 
     def search_all(self, keyword: str, markets: Optional[list], max_items: int,
                    rates: dict) -> list:
-        keys = markets or list(ACTORS.keys())
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        keys = [k for k in (markets or list(ACTORS.keys())) if k in ACTORS]
         all_results = []
-        for key in keys:
-            if key not in ACTORS:
-                continue
-            all_results.extend(self.search_market(key, keyword, max_items, rates))
-            time.sleep(0.8)
+        with ThreadPoolExecutor(max_workers=len(keys)) as executor:
+            futures = {executor.submit(self.search_market, k, keyword, max_items, rates): k for k in keys}
+            for future in as_completed(futures):
+                try:
+                    all_results.extend(future.result())
+                except Exception as e:
+                    log.error(f"Market {futures[future]} failed: {e}")
         return all_results
 
     def _normalise(self, item: dict, cfg: dict, rates: dict) -> Optional[dict]:
