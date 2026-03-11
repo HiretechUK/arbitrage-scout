@@ -231,6 +231,30 @@ def run_search(
     Full pipeline: scrape → save → score deals → fire alerts.
     Returns summary dict.
     """
+    # --------------- Cache check — skip Apify if fresh results exist ---------------
+    cached = db.get_listings(keyword=keyword, limit=1)
+    if cached:
+        from datetime import timedelta
+        last_scraped = cached[0].get("scraped_at", "")
+        if last_scraped:
+            try:
+                age = datetime.utcnow() - datetime.fromisoformat(last_scraped)
+                if age < timedelta(hours=24):
+                    log.info(f"Cache hit for '{keyword}' (age {age}), skipping Apify call")
+                    all_scored = db.get_listings(keyword=keyword, limit=10000, order_by="deal_score DESC")
+                    deals = [l for l in all_scored if l.get("deal_score", 0) >= 30]
+                    return {
+                        "keyword": keyword,
+                        "total": len(all_scored),
+                        "new": 0,
+                        "deals": len(deals),
+                        "new_listings": [],
+                        "top_deals": sorted(deals, key=lambda x: x.get("deal_score", 0), reverse=True)[:20],
+                        "cached": True,
+                    }
+            except Exception:
+                pass  # malformed date — fall through to live scrape
+
     rates = get_exchange_rates()
     runner = ApifyRunner(apify_token)
 
